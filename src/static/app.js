@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      activitySelect.replaceChildren(activitySelect.options[0]);
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -27,6 +28,97 @@ document.addEventListener("DOMContentLoaded", () => {
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
         `;
 
+        const participantsSection = document.createElement("div");
+        participantsSection.className = "participants-section";
+
+        const participantsHeading = document.createElement("h5");
+        participantsHeading.textContent = `Participants (${details.participants.length})`;
+        participantsSection.appendChild(participantsHeading);
+
+        if (details.participants.length > 0) {
+          const participantsList = document.createElement("ul");
+          participantsList.className = "participants-list";
+
+          details.participants.forEach((participant) => {
+            const participantItem = document.createElement("li");
+            const participantEmail = document.createElement("span");
+            participantEmail.textContent = participant;
+            participantItem.appendChild(participantEmail);
+
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "participant-delete";
+            deleteButton.setAttribute(
+              "aria-label",
+              `Unregister ${participant} from ${name}`
+            );
+            deleteButton.title = "Unregister participant";
+
+            const deleteIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            deleteIcon.setAttribute("viewBox", "0 0 24 24");
+            deleteIcon.setAttribute("aria-hidden", "true");
+            const deletePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            deletePath.setAttribute(
+              "d",
+              "M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v7m6-7v7"
+            );
+            deletePath.setAttribute("fill", "none");
+            deletePath.setAttribute("stroke", "currentColor");
+            deletePath.setAttribute("stroke-linecap", "round");
+            deletePath.setAttribute("stroke-linejoin", "round");
+            deletePath.setAttribute("stroke-width", "2");
+            deleteIcon.appendChild(deletePath);
+            deleteButton.appendChild(deleteIcon);
+
+            deleteButton.addEventListener("click", async () => {
+              deleteButton.disabled = true;
+              try {
+                const response = await fetch(
+                  `/activities/${encodeURIComponent(name)}/participants?email=${encodeURIComponent(participant)}`,
+                  { method: "DELETE" }
+                );
+                const result = await response.json();
+
+                if (!response.ok) {
+                  throw new Error(result.detail || "Failed to unregister participant");
+                }
+
+                details.participants.splice(details.participants.indexOf(participant), 1);
+                participantItem.remove();
+                participantsHeading.textContent = `Participants (${details.participants.length})`;
+                activityCard.querySelector("p:last-of-type").textContent =
+                  `Availability: ${details.max_participants - details.participants.length} spots left`;
+
+                if (details.participants.length === 0) {
+                  participantsList.remove();
+                  const emptyMessage = document.createElement("p");
+                  emptyMessage.className = "participants-empty";
+                  emptyMessage.textContent = "No participants yet.";
+                  participantsSection.appendChild(emptyMessage);
+                }
+              } catch (error) {
+                messageDiv.textContent = error.message || "Failed to unregister participant.";
+                messageDiv.className = "error";
+                messageDiv.classList.remove("hidden");
+                console.error("Error unregistering participant:", error);
+              } finally {
+                deleteButton.disabled = false;
+              }
+            });
+
+            participantItem.appendChild(deleteButton);
+            participantsList.appendChild(participantItem);
+          });
+
+          participantsSection.appendChild(participantsList);
+        } else {
+          const emptyMessage = document.createElement("p");
+          emptyMessage.className = "participants-empty";
+          emptyMessage.textContent = "No participants yet.";
+          participantsSection.appendChild(emptyMessage);
+        }
+
+        activityCard.appendChild(participantsSection);
         activitiesList.appendChild(activityCard);
 
         // Add option to select dropdown
@@ -62,6 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        await fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
